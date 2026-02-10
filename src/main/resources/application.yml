@@ -1,0 +1,61 @@
+spring:
+  application:
+    name: CommunityHub-Backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/communityhub}
+    username: ${DB_USERNAME:communityhub}
+    password: ${DB_PASSWORD:communityhub}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+server:
+  error:
+    include-message: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  cors:
+    allowed-origins:
+      - ${FRONTEND_ORIGIN:http://localhost:5173}
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:communityhub-backend}
+      secret: ${JWT_SECRET:development-secret-change-me-development-secret-change-me}
+      access-token-ttl: ${JWT_ACCESS_TTL:PT15M}
+      refresh-token-ttl: ${JWT_REFRESH_TTL:P30D}
+  media:
+    bucket: ${MEDIA_BUCKET:communityhub-public}
+    endpoint: ${MEDIA_ENDPOINT:http://localhost:9100}
+    access-key: ${MEDIA_ACCESS_KEY:minioadmin}
+    secret-key: ${MEDIA_SECRET_KEY:minioadmin}
+    region: ${MEDIA_REGION:us-east-1}
+    path-style-access-enabled: ${MEDIA_PATH_STYLE:true}
+    upload-url-ttl: ${MEDIA_UPLOAD_URL_TTL:PT10M}
+    read-url-ttl: ${MEDIA_READ_URL_TTL:PT10M}
+    reservation-ttl: ${MEDIA_RESERVATION_TTL:PT15M}
+    orphan-retention: ${MEDIA_ORPHAN_RETENTION:PT24H}
+    max-file-size-bytes: ${MEDIA_MAX_FILE_SIZE_BYTES:5242880}
+    allowed-mime-types:
+      - image/jpeg
+      - image/png

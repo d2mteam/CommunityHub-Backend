@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:communityhub;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+  security:
+    jwt:
+      issuer: communityhub-test
+      secret: test-secret-test-secret-test-secret-test-secret
+      access-token-ttl: PT15M
+      refresh-token-ttl: P30D
+  media:
+    bucket: communityhub-test
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    region: us-east-1
+    path-style-access-enabled: true
+    upload-url-ttl: PT10M
+    read-url-ttl: PT10M
+    reservation-ttl: PT15M
+    orphan-retention: PT24H
+    max-file-size-bytes: 5242880
+    allowed-mime-types:
+      - image/jpeg
+      - image/png
