@@ -1,0 +1,28 @@
+package com.app.communityhub.content;
+
+import com.app.communityhub.auth.security.CurrentUserService;
+import com.app.communityhub.content.dto.CommentResponse;
+import com.app.communityhub.content.dto.CreateCommentRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/comments")
+@RequiredArgsConstructor
+public class CommentController {
+
+    private final CommentService commentService;
+    private final CurrentUserService currentUserService;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public CommentResponse create(@Valid @RequestBody CreateCommentRequest request) {
+        return commentService.create(currentUserService.requireUserId(), request);
+    }
+}
