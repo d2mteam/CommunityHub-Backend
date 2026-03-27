@@ -1,13 +1,13 @@
-package com.app.communityhub.user;
+package com.app.communityhub.auth.password;
 
-import com.app.communityhub.media.MediaAssetEntity;
+import com.app.communityhub.user.UserEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapsId;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
@@ -15,25 +15,24 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.annotations.UuidGenerator;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "users")
-public class UserEntity {
+@Table(name = "password_credentials")
+public class PasswordCredentialEntity {
 
     @Id
-    @GeneratedValue
-    @UuidGenerator
-    private UUID id;
+    @Column(name = "user_id")
+    private UUID userId;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String username;
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @MapsId
+    @JoinColumn(name = "user_id", nullable = false)
+    private UserEntity user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "avatar_media_id")
-    private MediaAssetEntity avatarMedia;
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,7 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserDetailsLookupService userDetailsLookupService;
+    private final AuthPrincipalLookupService authPrincipalLookupService;
 
     @Override
     protected void doFilterInternal(
@@ -36,11 +37,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
         try {
             JwtService.TokenPrincipal principal = jwtService.parseAccessToken(token);
-            AuthUser authUser = userDetailsLookupService.loadById(principal.userId());
+            AuthPrincipal authPrincipal = authPrincipalLookupService.loadById(principal.userId());
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    authUser,
+                    authPrincipal,
                     token,
-                    authUser.getAuthorities()
+                    List.of()
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
         } catch (AppException ignored) {

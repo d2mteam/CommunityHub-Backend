@@ -5,6 +5,12 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/communityhub}
     username: ${DB_USERNAME:communityhub}
     password: ${DB_PASSWORD:communityhub}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:PT2S}
   jpa:
     open-in-view: false
     hibernate:
@@ -44,6 +50,21 @@ app:
       secret: ${JWT_SECRET:development-secret-change-me-development-secret-change-me}
       access-token-ttl: ${JWT_ACCESS_TTL:PT15M}
       refresh-token-ttl: ${JWT_REFRESH_TTL:P30D}
+  oauth:
+    frontend-callback-uri: ${OAUTH_FRONTEND_CALLBACK_URI:http://localhost:5173/auth/oauth/callback}
+    state-ttl: ${OAUTH_STATE_TTL:PT5M}
+    ticket-ttl: ${OAUTH_TICKET_TTL:PT2M}
+    providers:
+      google:
+        issuer-uri: ${OAUTH_GOOGLE_ISSUER_URI:http://localhost:9201}
+        client-id: ${OAUTH_GOOGLE_CLIENT_ID:communityhub-web}
+        client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:dev-secret}
+        redirect-uri: ${OAUTH_GOOGLE_REDIRECT_URI:http://localhost:8080/api/auth/oauth/google/callback}
+      facebook:
+        issuer-uri: ${OAUTH_FACEBOOK_ISSUER_URI:http://localhost:9202}
+        client-id: ${OAUTH_FACEBOOK_CLIENT_ID:communityhub-web}
+        client-secret: ${OAUTH_FACEBOOK_CLIENT_SECRET:dev-secret}
+        redirect-uri: ${OAUTH_FACEBOOK_REDIRECT_URI:http://localhost:8080/api/auth/oauth/facebook/callback}
   media:
     bucket: ${MEDIA_BUCKET:communityhub-public}
     endpoint: ${MEDIA_ENDPOINT:http://localhost:9100}
@@ -59,3 +80,14 @@ app:
     allowed-mime-types:
       - image/jpeg
       - image/png
+  content:
+    posts:
+      max-attachments: ${CONTENT_POST_MAX_ATTACHMENTS:8}
+      default-page-size: ${CONTENT_POST_DEFAULT_PAGE_SIZE:10}
+      max-page-size: ${CONTENT_POST_MAX_PAGE_SIZE:30}
+    comments:
+      max-attachments: ${CONTENT_COMMENT_MAX_ATTACHMENTS:8}
+      default-page-size: ${CONTENT_COMMENT_DEFAULT_PAGE_SIZE:10}
+      max-page-size: ${CONTENT_COMMENT_MAX_PAGE_SIZE:30}
+  ids:
+    worker-id: ${ID_WORKER_ID:1}

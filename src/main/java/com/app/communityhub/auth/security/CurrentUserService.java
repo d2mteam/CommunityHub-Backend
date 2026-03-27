@@ -10,12 +10,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class CurrentUserService {
 
-    public AuthUser requireUser() {
+    public AuthPrincipal requireUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !(authentication.getPrincipal() instanceof AuthUser authUser)) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthPrincipal authPrincipal)) {
             throw new AppException(HttpStatus.UNAUTHORIZED, "Authentication required");
         }
-        return authUser;
+        return authPrincipal;
     }
 
     public UUID requireUserId() {

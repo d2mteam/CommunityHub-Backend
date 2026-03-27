@@ -1,9 +1,7 @@
 spring:
-  datasource:
-    url: jdbc:h2:mem:communityhub;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+  data:
+    redis:
+      timeout: PT2S
   jpa:
     open-in-view: false
     hibernate:
@@ -28,6 +26,21 @@ app:
       secret: test-secret-test-secret-test-secret-test-secret
       access-token-ttl: PT15M
       refresh-token-ttl: P30D
+  oauth:
+    frontend-callback-uri: http://localhost:5173/auth/oauth/callback
+    state-ttl: PT5M
+    ticket-ttl: PT2M
+    providers:
+      google:
+        issuer-uri: http://localhost:9201
+        client-id: communityhub-web
+        client-secret: dev-secret
+        redirect-uri: http://localhost:8080/api/auth/oauth/google/callback
+      facebook:
+        issuer-uri: http://localhost:9202
+        client-id: communityhub-web
+        client-secret: dev-secret
+        redirect-uri: http://localhost:8080/api/auth/oauth/facebook/callback
   media:
     bucket: communityhub-test
     endpoint: http://localhost:9000
@@ -43,3 +56,14 @@ app:
     allowed-mime-types:
       - image/jpeg
       - image/png
+  content:
+    posts:
+      max-attachments: 8
+      default-page-size: 10
+      max-page-size: 30
+    comments:
+      max-attachments: 8
+      default-page-size: 10
+      max-page-size: 30
+  ids:
+    worker-id: 1

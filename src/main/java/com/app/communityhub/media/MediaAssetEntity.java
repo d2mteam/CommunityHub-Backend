@@ -13,14 +13,16 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
 @Getter
-@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "media_assets")
 public class MediaAssetEntity {
@@ -78,4 +80,51 @@ public class MediaAssetEntity {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Builder
+    private MediaAssetEntity(
+            String mediaKey,
+            String objectKey,
+            UserEntity ownerUser,
+            String mimeType,
+            long sizeBytes,
+            Instant reservationExpiresAt
+    ) {
+        this.mediaKey = mediaKey;
+        this.objectKey = objectKey;
+        this.ownerUser = ownerUser;
+        this.status = MediaStatus.RESERVED;
+        this.mimeType = mimeType;
+        this.sizeBytes = sizeBytes;
+        this.reservationExpiresAt = reservationExpiresAt;
+    }
+
+    public void completeUpload(
+            long sizeBytes,
+            String etag,
+            String mimeType,
+            Integer width,
+            Integer height,
+            Instant uploadedAt
+    ) {
+        this.sizeBytes = sizeBytes;
+        this.status = MediaStatus.UPLOADED;
+        this.uploadedAt = uploadedAt;
+        this.etag = etag;
+        this.mimeType = mimeType == null || mimeType.isBlank() ? this.mimeType : mimeType;
+        this.width = width;
+        this.height = height;
+        this.orphanedAt = null;
+    }
+
+    public void markAttached(Instant attachedAt) {
+        this.status = MediaStatus.ATTACHED;
+        this.attachedAt = attachedAt;
+        this.orphanedAt = null;
+    }
+
+    public void markOrphaned(Instant orphanedAt) {
+        this.status = MediaStatus.ORPHANED;
+        this.orphanedAt = orphanedAt;
+    }
 }

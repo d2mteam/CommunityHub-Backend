@@ -22,7 +22,7 @@ public class JwtService {
 
     private final AppProperties appProperties;
 
-    public String generateAccessToken(AuthUser user) {
+    public String generateAccessToken(AuthPrincipal user) {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(appProperties.getSecurity().getJwt().getAccessTokenTtl());
         return Jwts.builder()

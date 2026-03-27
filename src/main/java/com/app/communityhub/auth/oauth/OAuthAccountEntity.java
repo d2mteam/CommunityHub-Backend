@@ -1,6 +1,6 @@
-package com.app.communityhub.user;
+package com.app.communityhub.auth.oauth;
 
-import com.app.communityhub.media.MediaAssetEntity;
+import com.app.communityhub.user.UserEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -20,20 +21,32 @@ import org.hibernate.annotations.UuidGenerator;
 @Getter
 @Setter
 @Entity
-@Table(name = "users")
-public class UserEntity {
+@Table(
+        name = "oauth_accounts",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_oauth_accounts_provider_subject",
+                columnNames = {"provider", "provider_subject"}
+        )
+)
+public class OAuthAccountEntity {
 
     @Id
     @GeneratedValue
     @UuidGenerator
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String username;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private UserEntity user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "avatar_media_id")
-    private MediaAssetEntity avatarMedia;
+    @Column(nullable = false, length = 50)
+    private String provider;
+
+    @Column(name = "provider_subject", nullable = false)
+    private String providerSubject;
+
+    @Column(length = 255)
+    private String email;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
