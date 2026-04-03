@@ -1,8 +1,6 @@
-package com.app.communityhub.content;
+package com.app.communityhub.content.comment;
 
 import com.app.communityhub.auth.security.CurrentUserService;
-import com.app.communityhub.content.dto.CommentResponse;
-import com.app.communityhub.content.dto.CreateCommentRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -1,12 +1,12 @@
-package com.app.communityhub.content;
+package com.app.communityhub.content.post;
 
 import com.app.communityhub.auth.security.CurrentUserService;
-import com.app.communityhub.content.dto.CommentPageResponse;
-import com.app.communityhub.content.dto.PostResponse;
-import com.app.communityhub.content.dto.CreatePostRequest;
+import com.app.communityhub.content.comment.CommentResponse;
+import com.app.communityhub.content.comment.CommentService;
+import com.app.communityhub.content.comment.CommentResponse;
+import com.app.communityhub.content.shared.CursorPageResponse;
+import com.app.communityhub.content.shared.SortOrder;
 import jakarta.validation.Valid;
-import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,22 +34,27 @@ public class PostController {
     }
 
     @GetMapping
-    public List<PostResponse> list() {
-        return postService.list();
+    public CursorPageResponse<PostResponse> list(
+            @RequestParam(defaultValue = "newest") String sort,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return postService.list(cursor, SortOrder.from(sort), limit);
     }
 
     @GetMapping("/{postId}")
-    public PostResponse get(@PathVariable UUID postId) {
+    public PostResponse get(@PathVariable Long postId) {
         return postService.get(postId);
     }
 
     @GetMapping("/{postId}/comments")
-    public CommentPageResponse comments(
-            @PathVariable UUID postId,
-            @RequestParam(required = false) UUID parentId,
-            @RequestParam(defaultValue = "0") int offset,
+    public CursorPageResponse<CommentResponse> comments(
+            @PathVariable Long postId,
+            @RequestParam(required = false) Long parentId,
+            @RequestParam(defaultValue = "newest") String sort,
+            @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "10") int limit
     ) {
-        return commentService.getPage(postId, parentId, offset, limit);
+        return commentService.getPage(postId, parentId, SortOrder.from(sort), cursor, limit);
     }
 }

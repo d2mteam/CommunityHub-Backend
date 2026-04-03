@@ -1,4 +1,4 @@
-package com.app.communityhub.content.dto;
+package com.app.communityhub.content.post;
 
 import java.util.List;
 

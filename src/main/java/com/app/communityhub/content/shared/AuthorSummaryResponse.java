@@ -1,6 +1,6 @@
-package com.app.communityhub.content.dto;
+package com.app.communityhub.content.shared;
 
-import com.app.communityhub.user.dto.MediaRefResponse;
+import com.app.communityhub.user.profile.dto.MediaRefResponse;
 import java.util.UUID;
 
 public record AuthorSummaryResponse(

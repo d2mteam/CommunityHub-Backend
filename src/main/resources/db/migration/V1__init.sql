@@ -1,10 +1,48 @@
 create table users (
     id uuid primary key,
     username varchar(50) not null unique,
-    password_hash varchar(255) not null,
     avatar_media_id uuid null,
     created_at timestamp with time zone not null,
     updated_at timestamp with time zone not null
+);
+
+create table password_credentials (
+    user_id uuid primary key references users(id) on delete cascade,
+    password_hash varchar(255) not null,
+    created_at timestamp with time zone not null,
+    updated_at timestamp with time zone not null
+);
+
+create table oauth_accounts (
+    id uuid primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    provider varchar(50) not null,
+    provider_subject varchar(255) not null,
+    email varchar(255) null,
+    created_at timestamp with time zone not null,
+    updated_at timestamp with time zone not null,
+    constraint uk_oauth_accounts_provider_subject unique (provider, provider_subject)
+);
+
+create table oauth_login_states (
+    state_hash varchar(64) primary key,
+    provider varchar(50) not null,
+    code_verifier varchar(128) not null,
+    nonce varchar(128) not null,
+    return_to varchar(500) not null,
+    redirect_uri varchar(500) not null,
+    expires_at timestamp with time zone not null,
+    consumed_at timestamp with time zone null,
+    created_at timestamp with time zone not null
+);
+
+create table oauth_login_tickets (
+    ticket_hash varchar(64) primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    return_to varchar(500) not null,
+    expires_at timestamp with time zone not null,
+    consumed_at timestamp with time zone null,
+    created_at timestamp with time zone not null
 );
 
 create table refresh_tokens (
@@ -42,41 +80,32 @@ alter table users
     foreign key (avatar_media_id) references media_assets(id);
 
 create table posts (
-    id uuid primary key,
+    id bigint primary key,
     author_id uuid not null references users(id),
     content varchar(5000) not null,
+    attachments_jsonb jsonb not null default '[]'::jsonb,
     created_at timestamp with time zone not null,
     updated_at timestamp with time zone not null
-);
-
-create table post_attachments (
-    id uuid primary key,
-    post_id uuid not null references posts(id) on delete cascade,
-    media_asset_id uuid not null references media_assets(id),
-    order_index integer not null
 );
 
 create table comments (
-    id uuid primary key,
-    post_id uuid not null references posts(id) on delete cascade,
+    id bigint primary key,
+    post_id bigint not null references posts(id) on delete cascade,
     author_id uuid not null references users(id),
-    parent_id uuid null references comments(id) on delete cascade,
-    root_id uuid null references comments(id) on delete cascade,
+    parent_id bigint null references comments(id) on delete cascade,
+    root_id bigint null references comments(id) on delete cascade,
     depth integer not null,
     content varchar(5000) not null,
+    attachments_jsonb jsonb not null default '[]'::jsonb,
     created_at timestamp with time zone not null,
     updated_at timestamp with time zone not null
 );
 
-create table comment_attachments (
-    id uuid primary key,
-    comment_id uuid not null references comments(id) on delete cascade,
-    media_asset_id uuid not null references media_assets(id),
-    order_index integer not null
-);
-
 create index idx_refresh_tokens_user_id on refresh_tokens(user_id);
+create index idx_oauth_accounts_user_id on oauth_accounts(user_id);
+create index idx_oauth_login_states_expires_at on oauth_login_states(expires_at);
+create index idx_oauth_login_tickets_expires_at on oauth_login_tickets(expires_at);
 create index idx_media_assets_owner_user_id on media_assets(owner_user_id);
 create index idx_media_assets_status_updated_at on media_assets(status, updated_at);
 create index idx_posts_author_id on posts(author_id);
-create index idx_comments_post_id_created_at on comments(post_id, created_at);
+create index idx_comments_post_parent_id_id on comments(post_id, parent_id, id);

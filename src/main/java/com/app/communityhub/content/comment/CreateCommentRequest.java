@@ -1,12 +1,11 @@
-package com.app.communityhub.content.dto;
+package com.app.communityhub.content.comment;
 
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
-import java.util.UUID;
 
 public record CreateCommentRequest(
-        @NotNull UUID postId,
-        UUID parentId,
+        @NotNull String postId,
+        String parentId,
         String content,
         List<String> mediaKeys
 ) {

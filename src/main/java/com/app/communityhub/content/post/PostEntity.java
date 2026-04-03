@@ -1,37 +1,34 @@
-package com.app.communityhub.content;
+package com.app.communityhub.content.post;
 
+import com.app.communityhub.content.shared.AttachmentDocument;
 import com.app.communityhub.user.UserEntity;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 @Getter
-@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "posts")
 public class PostEntity {
 
     @Id
-    @GeneratedValue
-    @UuidGenerator
-    private UUID id;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "author_id", nullable = false)
@@ -40,9 +37,9 @@ public class PostEntity {
     @Column(nullable = false, length = 5000)
     private String content;
 
-    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("orderIndex asc")
-    private List<PostAttachmentEntity> attachments = new ArrayList<>();
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "attachments_jsonb", nullable = false, columnDefinition = "jsonb")
+    private List<AttachmentDocument> attachments = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -51,4 +48,16 @@ public class PostEntity {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Builder
+    private PostEntity(Long id, UserEntity author, String content, List<AttachmentDocument> attachments) {
+        this.id = id;
+        this.author = author;
+        this.content = content;
+        replaceAttachments(attachments);
+    }
+
+    public void replaceAttachments(List<AttachmentDocument> attachments) {
+        this.attachments = attachments == null ? new ArrayList<>() : new ArrayList<>(attachments);
+    }
 }
