@@ -1,14 +1,18 @@
 package com.app.communityhub.support;
 
-import com.app.communityhub.auth.dto.AuthResponse;
-import com.app.communityhub.media.InMemoryObjectStorageClient;
+import com.app.communityhub.auth.api.AuthResponse;
 import com.app.communityhub.media.MediaAssetEntity;
 import com.app.communityhub.media.MediaAssetRepository;
-import com.app.communityhub.media.dto.CompleteMediaResponse;
-import com.app.communityhub.media.dto.CreateMediaReservationResponse;
+import com.app.communityhub.media.api.CompleteMediaResponse;
+import com.app.communityhub.media.api.CreateMediaReservationResponse;
+import com.app.communityhub.media.storage.InMemoryObjectStorageClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -16,7 +20,32 @@ import org.springframework.test.web.servlet.MvcResult;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-public class IntegrationTestSupport {
+public abstract class IntegrationTestSupport {
+
+    @SuppressWarnings("resource")
+    private static final PostgreSQLContainer<?> POSTGRESQL = new PostgreSQLContainer<>("postgres:17-alpine")
+            .withDatabaseName("communityhub_test")
+            .withUsername("communityhub")
+            .withPassword("communityhub");
+
+    @SuppressWarnings("resource")
+    private static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
+            .withExposedPorts(6379);
+
+    static {
+        POSTGRESQL.start();
+        REDIS.start();
+    }
+
+    @DynamicPropertySource
+    static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRESQL::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRESQL::getUsername);
+        registry.add("spring.datasource.password", POSTGRESQL::getPassword);
+        registry.add("spring.datasource.driver-class-name", POSTGRESQL::getDriverClassName);
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+    }
 
     protected AuthResponse registerAndLogin(
             MockMvc mockMvc,
