@@ -103,6 +103,9 @@ public class OAuthLoginFlowService {
         if (provider == null) {
             throw new AppException(HttpStatus.NOT_FOUND, "OAuth provider not found");
         }
+        if (!provider.isEnabled()) {
+            throw new AppException(HttpStatus.NOT_FOUND, "OAuth provider is disabled");
+        }
         return new ProviderSelection(normalized, provider);
     }
 

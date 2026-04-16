@@ -56,11 +56,13 @@ app:
     ticket-ttl: ${OAUTH_TICKET_TTL:PT2M}
     providers:
       google:
+        enabled: ${OAUTH_GOOGLE_ENABLED:false}
         issuer-uri: ${OAUTH_GOOGLE_ISSUER_URI:http://localhost:9201}
         client-id: ${OAUTH_GOOGLE_CLIENT_ID:communityhub-web}
         client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:dev-secret}
         redirect-uri: ${OAUTH_GOOGLE_REDIRECT_URI:http://localhost:8080/api/auth/oauth/google/callback}
       facebook:
+        enabled: ${OAUTH_FACEBOOK_ENABLED:false}
         issuer-uri: ${OAUTH_FACEBOOK_ISSUER_URI:http://localhost:9202}
         client-id: ${OAUTH_FACEBOOK_CLIENT_ID:communityhub-web}
         client-secret: ${OAUTH_FACEBOOK_CLIENT_SECRET:dev-secret}

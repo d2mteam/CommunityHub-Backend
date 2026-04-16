@@ -12,14 +12,16 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
 @Getter
-@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(
         name = "oauth_accounts",
@@ -55,4 +57,25 @@ public class OAuthAccountEntity {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Builder
+    private OAuthAccountEntity(UserEntity user, String provider, String providerSubject, String email) {
+        this.user = user;
+        this.provider = provider;
+        this.providerSubject = providerSubject;
+        this.email = email;
+    }
+
+    public static OAuthAccountEntity link(UserEntity user, String provider, String providerSubject, String email) {
+        return OAuthAccountEntity.builder()
+                .user(user)
+                .provider(provider)
+                .providerSubject(providerSubject)
+                .email(email)
+                .build();
+    }
+
+    public void updateEmail(String email) {
+        this.email = email;
+    }
 }

@@ -11,13 +11,15 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
-@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "password_credentials")
 public class PasswordCredentialEntity {
@@ -41,4 +43,21 @@ public class PasswordCredentialEntity {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Builder
+    private PasswordCredentialEntity(UserEntity user, String passwordHash) {
+        this.user = user;
+        this.passwordHash = passwordHash;
+    }
+
+    public static PasswordCredentialEntity create(UserEntity user, String passwordHash) {
+        return PasswordCredentialEntity.builder()
+                .user(user)
+                .passwordHash(passwordHash)
+                .build();
+    }
+
+    public void updatePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }

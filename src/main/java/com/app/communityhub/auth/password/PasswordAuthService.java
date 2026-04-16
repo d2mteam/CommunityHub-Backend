@@ -32,9 +32,10 @@ public class PasswordAuthService {
         user.setUsername(request.username().trim());
         UserEntity saved = userRepository.save(user);
 
-        PasswordCredentialEntity passwordCredential = new PasswordCredentialEntity();
-        passwordCredential.setUser(saved);
-        passwordCredential.setPasswordHash(passwordEncoder.encode(request.password()));
+        PasswordCredentialEntity passwordCredential = PasswordCredentialEntity.create(
+                saved,
+                passwordEncoder.encode(request.password())
+        );
         passwordCredentialRepository.save(passwordCredential);
 
         return authSessionService.issueTokensForUser(saved);

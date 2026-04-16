@@ -22,7 +22,7 @@ public class OAuthAccountProvisioningService {
     public UserEntity findOrCreateUser(String providerName, OidcIdentity identity) {
         return oauthAccountRepository.findByProviderAndProviderSubject(providerName, identity.subject())
                 .map(account -> {
-                    account.setEmail(identity.email());
+                    account.updateEmail(identity.email());
                     return account.getUser();
                 })
                 .orElseGet(() -> createUserWithOAuthAccount(providerName, identity));
@@ -33,11 +33,12 @@ public class OAuthAccountProvisioningService {
         user.setUsername(nextAvailableUsername(identity, providerName));
         UserEntity savedUser = userRepository.save(user);
 
-        OAuthAccountEntity account = new OAuthAccountEntity();
-        account.setUser(savedUser);
-        account.setProvider(providerName);
-        account.setProviderSubject(identity.subject());
-        account.setEmail(identity.email());
+        OAuthAccountEntity account = OAuthAccountEntity.link(
+                savedUser,
+                providerName,
+                identity.subject(),
+                identity.email()
+        );
         oauthAccountRepository.save(account);
         return savedUser;
     }

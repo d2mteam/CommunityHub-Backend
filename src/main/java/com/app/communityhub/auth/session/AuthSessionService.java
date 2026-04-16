@@ -40,8 +40,7 @@ public class AuthSessionService {
             throw new AppException(HttpStatus.UNAUTHORIZED, "Refresh token mismatch");
         }
 
-        storedToken.setRevoked(true);
-        storedToken.setRevokedAt(Instant.now());
+        storedToken.revoke(Instant.now());
         return issueTokensForUser(storedToken.getUser());
     }
 
@@ -49,8 +48,7 @@ public class AuthSessionService {
     public void logout(String refreshToken) {
         JwtService.TokenPrincipal tokenPrincipal = jwtService.parseRefreshToken(refreshToken);
         refreshTokenRepository.findByTokenId(tokenPrincipal.tokenId()).ifPresent(storedToken -> {
-            storedToken.setRevoked(true);
-            storedToken.setRevokedAt(Instant.now());
+            storedToken.revoke(Instant.now());
         });
     }
 
@@ -64,12 +62,12 @@ public class AuthSessionService {
         String tokenId = UUID.randomUUID().toString();
         String refreshToken = jwtService.generateRefreshToken(authPrincipal.id(), tokenId);
 
-        RefreshTokenEntity refreshTokenEntity = new RefreshTokenEntity();
-        refreshTokenEntity.setTokenId(tokenId);
-        refreshTokenEntity.setTokenHash(TokenHashing.sha256(refreshToken));
-        refreshTokenEntity.setUser(userRepository.getReferenceById(authPrincipal.id()));
-        refreshTokenEntity.setExpiresAt(refreshExpiresAt);
-        refreshTokenEntity.setRevoked(false);
+        RefreshTokenEntity refreshTokenEntity = RefreshTokenEntity.issue(
+                tokenId,
+                TokenHashing.sha256(refreshToken),
+                userRepository.getReferenceById(authPrincipal.id()),
+                refreshExpiresAt
+        );
         refreshTokenRepository.save(refreshTokenEntity);
 
         return new AuthResponse(

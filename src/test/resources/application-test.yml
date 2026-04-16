@@ -32,11 +32,13 @@ app:
     ticket-ttl: PT2M
     providers:
       google:
+        enabled: false
         issuer-uri: http://localhost:9201
         client-id: communityhub-web
         client-secret: dev-secret
         redirect-uri: http://localhost:8080/api/auth/oauth/google/callback
       facebook:
+        enabled: false
         issuer-uri: http://localhost:9202
         client-id: communityhub-web
         client-secret: dev-secret

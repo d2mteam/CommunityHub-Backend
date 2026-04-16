@@ -91,12 +91,14 @@ public class AppProperties {
         private static Map<String, Provider> defaultProviders() {
             Map<String, Provider> defaults = new LinkedHashMap<>();
             defaults.put("google", new Provider(
+                    false,
                     "http://localhost:9201",
                     "communityhub-web",
                     "dev-secret",
                     "http://localhost:8080/api/auth/oauth/google/callback"
             ));
             defaults.put("facebook", new Provider(
+                    false,
                     "http://localhost:9202",
                     "communityhub-web",
                     "dev-secret",
@@ -108,6 +110,8 @@ public class AppProperties {
         @Getter
         @Setter
         public static class Provider {
+            private boolean enabled;
+
             @NotBlank
             private String issuerUri;
 
@@ -123,7 +127,8 @@ public class AppProperties {
             public Provider() {
             }
 
-            public Provider(String issuerUri, String clientId, String clientSecret, String redirectUri) {
+            public Provider(boolean enabled, String issuerUri, String clientId, String clientSecret, String redirectUri) {
+                this.enabled = enabled;
                 this.issuerUri = issuerUri;
                 this.clientId = clientId;
                 this.clientSecret = clientSecret;

@@ -11,13 +11,15 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
 @Getter
-@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "refresh_tokens")
 public class RefreshTokenEntity {
@@ -49,4 +51,27 @@ public class RefreshTokenEntity {
 
     @Column(name = "revoked_at")
     private Instant revokedAt;
+
+    @Builder
+    private RefreshTokenEntity(String tokenId, String tokenHash, UserEntity user, Instant expiresAt) {
+        this.tokenId = tokenId;
+        this.tokenHash = tokenHash;
+        this.user = user;
+        this.expiresAt = expiresAt;
+        this.revoked = false;
+    }
+
+    public static RefreshTokenEntity issue(String tokenId, String tokenHash, UserEntity user, Instant expiresAt) {
+        return RefreshTokenEntity.builder()
+                .tokenId(tokenId)
+                .tokenHash(tokenHash)
+                .user(user)
+                .expiresAt(expiresAt)
+                .build();
+    }
+
+    public void revoke(Instant revokedAt) {
+        this.revoked = true;
+        this.revokedAt = revokedAt;
+    }
 }
