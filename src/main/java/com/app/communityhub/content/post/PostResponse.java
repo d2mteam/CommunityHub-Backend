@@ -11,6 +11,8 @@ public record PostResponse(
         AuthorSummaryResponse author,
         List<AttachmentResponse> attachments,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Instant editedAt,
+        boolean isEdited
 ) {
 }

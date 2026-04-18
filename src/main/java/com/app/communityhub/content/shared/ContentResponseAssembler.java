@@ -41,6 +41,8 @@ public class ContentResponseAssembler {
                 mapped.attachments(),
                 mapped.createdAt(),
                 mapped.updatedAt(),
+                mapped.editedAt(),
+                mapped.isEdited(),
                 replyCount
         );
     }

@@ -15,6 +15,8 @@ public record CommentResponse(
         List<AttachmentResponse> attachments,
         Instant createdAt,
         Instant updatedAt,
+        Instant editedAt,
+        boolean isEdited,
         long replyCount
 ) {
 }
