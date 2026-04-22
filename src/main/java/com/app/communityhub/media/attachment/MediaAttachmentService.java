@@ -52,13 +52,28 @@ public class MediaAttachmentService {
 
     @Transactional
     public List<MediaAssetEntity> prepareAttachments(UUID userId, List<String> mediaKeys, int maxAttachments) {
+        return prepareAttachments(userId, mediaKeys, maxAttachments, false);
+    }
+
+    @Transactional
+    public List<MediaAssetEntity> prepareAttachmentsForUpdate(UUID userId, List<String> mediaKeys, int maxAttachments) {
+        return prepareAttachments(userId, mediaKeys, maxAttachments, true);
+    }
+
+    @Transactional
+    public List<MediaAssetEntity> prepareAttachments(
+            UUID userId,
+            List<String> mediaKeys,
+            int maxAttachments,
+            boolean allowAttached
+    ) {
         List<String> normalizedKeys = mediaKeys == null ? List.of() : mediaKeys.stream().distinct().toList();
         if (normalizedKeys.size() > maxAttachments) {
             throw new AppException(HttpStatus.BAD_REQUEST, "A maximum of %d images is allowed".formatted(maxAttachments));
         }
         List<MediaAssetEntity> attachments = new ArrayList<>();
         for (String mediaKey : normalizedKeys) {
-            attachments.add(getOwnedUploadedMedia(userId, mediaKey));
+            attachments.add(allowAttached ? getOwnedReusableMedia(userId, mediaKey) : getOwnedUploadedMedia(userId, mediaKey));
         }
         return attachments;
     }
@@ -79,6 +94,14 @@ public class MediaAttachmentService {
     private MediaAssetEntity getOwnedUploadedMedia(UUID userId, String mediaKey) {
         MediaAssetEntity mediaAsset = getOwnedMedia(userId, mediaKey);
         if (mediaAsset.getStatus() != MediaStatus.UPLOADED) {
+            throw new AppException(HttpStatus.CONFLICT, "Media must be uploaded before it can be attached");
+        }
+        return mediaAsset;
+    }
+
+    private MediaAssetEntity getOwnedReusableMedia(UUID userId, String mediaKey) {
+        MediaAssetEntity mediaAsset = getOwnedMedia(userId, mediaKey);
+        if (mediaAsset.getStatus() != MediaStatus.UPLOADED && mediaAsset.getStatus() != MediaStatus.ATTACHED) {
             throw new AppException(HttpStatus.CONFLICT, "Media must be uploaded before it can be attached");
         }
         return mediaAsset;
