@@ -13,6 +13,7 @@ public interface PostRepository extends JpaRepository<PostEntity, Long> {
     @Query("""
             select p
             from PostEntity p
+            where p.deletedAt is null
             order by p.id desc
             """)
     List<PostEntity> findPageNewest(Pageable pageable);
@@ -21,7 +22,7 @@ public interface PostRepository extends JpaRepository<PostEntity, Long> {
     @Query("""
             select p
             from PostEntity p
-            where p.id < :id
+            where p.deletedAt is null and p.id < :id
             order by p.id desc
             """)
     List<PostEntity> findPageNewestAfter(@Param("id") Long id, Pageable pageable);
@@ -30,6 +31,7 @@ public interface PostRepository extends JpaRepository<PostEntity, Long> {
     @Query("""
             select p
             from PostEntity p
+            where p.deletedAt is null
             order by p.id asc
             """)
     List<PostEntity> findPageOldest(Pageable pageable);
@@ -38,12 +40,13 @@ public interface PostRepository extends JpaRepository<PostEntity, Long> {
     @Query("""
             select p
             from PostEntity p
-            where p.id > :id
+            where p.deletedAt is null and p.id > :id
             order by p.id asc
             """)
     List<PostEntity> findPageOldestAfter(@Param("id") Long id, Pageable pageable);
 
-    @Override
     @EntityGraph(attributePaths = {"author", "author.avatarMedia"})
-    java.util.Optional<PostEntity> findById(Long id);
+    java.util.Optional<PostEntity> findByIdAndDeletedAtIsNull(Long id);
+
+    boolean existsByIdAndDeletedAtIsNull(Long id);
 }

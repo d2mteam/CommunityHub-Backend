@@ -14,7 +14,7 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
     @Query("""
             select c
             from CommentEntity c
-            where c.post.id = :postId and c.parent is null
+            where c.post.id = :postId and c.parent is null and c.deletedAt is null
             order by c.id desc
             """)
     List<CommentEntity> findRootPageNewest(@Param("postId") Long postId, Pageable pageable);
@@ -25,6 +25,7 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
             from CommentEntity c
             where c.post.id = :postId
                 and c.parent is null
+                and c.deletedAt is null
                 and c.id < :id
             order by c.id desc
             """)
@@ -38,7 +39,7 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
     @Query("""
             select c
             from CommentEntity c
-            where c.post.id = :postId and c.parent is null
+            where c.post.id = :postId and c.parent is null and c.deletedAt is null
             order by c.id asc
             """)
     List<CommentEntity> findRootPageOldest(@Param("postId") Long postId, Pageable pageable);
@@ -49,6 +50,7 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
             from CommentEntity c
             where c.post.id = :postId
                 and c.parent is null
+                and c.deletedAt is null
                 and c.id > :id
             order by c.id asc
             """)
@@ -62,7 +64,7 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
     @Query("""
             select c
             from CommentEntity c
-            where c.post.id = :postId and c.parent.id = :parentId
+            where c.post.id = :postId and c.parent.id = :parentId and c.deletedAt is null
             order by c.id asc
             """)
     List<CommentEntity> findReplyPage(@Param("postId") Long postId, @Param("parentId") Long parentId, Pageable pageable);
@@ -73,6 +75,7 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
             from CommentEntity c
             where c.post.id = :postId
                 and c.parent.id = :parentId
+                and c.deletedAt is null
                 and c.id > :id
             order by c.id asc
             """)
@@ -83,12 +86,32 @@ public interface CommentRepository extends JpaRepository<CommentEntity, Long> {
             Pageable pageable
     );
 
-    boolean existsByIdAndPostId(Long id, Long postId);
+    boolean existsByIdAndPostIdAndDeletedAtIsNull(Long id, Long postId);
+
+    @EntityGraph(attributePaths = {"author", "author.avatarMedia"})
+    java.util.Optional<CommentEntity> findByIdAndDeletedAtIsNull(Long id);
+
+    List<CommentEntity> findAllByPostIdAndDeletedAtIsNullOrderByIdAsc(Long postId);
+
+    @Query(value = """
+            with recursive subtree as (
+                select c.id
+                from comments c
+                where c.id = :commentId and c.deleted_at is null
+                union all
+                select child.id
+                from comments child
+                join subtree parent_tree on child.parent_id = parent_tree.id
+                where child.deleted_at is null
+            )
+            select id from subtree order by id
+            """, nativeQuery = true)
+    List<Long> findVisibleSubtreeIds(@Param("commentId") Long commentId);
 
     @Query("""
             select c.parent.id as parentId, count(c.id) as replyCount
             from CommentEntity c
-            where c.parent.id in :parentIds
+            where c.parent.id in :parentIds and c.deletedAt is null
             group by c.parent.id
             """)
     List<CommentReplyCountView> countRepliesByParentIds(@Param("parentIds") Collection<Long> parentIds);

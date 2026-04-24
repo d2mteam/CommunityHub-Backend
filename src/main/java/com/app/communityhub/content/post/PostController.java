@@ -3,18 +3,19 @@ package com.app.communityhub.content.post;
 import com.app.communityhub.auth.security.CurrentUserService;
 import com.app.communityhub.content.comment.CommentResponse;
 import com.app.communityhub.content.comment.CommentService;
-import com.app.communityhub.content.comment.CommentResponse;
 import com.app.communityhub.content.shared.CursorPageResponse;
 import com.app.communityhub.content.shared.SortOrder;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,6 +32,17 @@ public class PostController {
     @ResponseStatus(HttpStatus.CREATED)
     public PostResponse create(@Valid @RequestBody CreatePostRequest request) {
         return postService.create(currentUserService.requireUserId(), request);
+    }
+
+    @PatchMapping("/{postId}")
+    public PostResponse update(@PathVariable Long postId, @Valid @RequestBody UpdatePostRequest request) {
+        return postService.update(currentUserService.requireUser(), postId, request);
+    }
+
+    @DeleteMapping("/{postId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long postId) {
+        postService.delete(currentUserService.requireUser(), postId);
     }
 
     @GetMapping

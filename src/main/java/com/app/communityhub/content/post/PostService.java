@@ -1,9 +1,16 @@
 package com.app.communityhub.content.post;
 
+import com.app.communityhub.auth.security.AuthPrincipal;
 import com.app.communityhub.common.AppException;
 import com.app.communityhub.common.SnowflakeIdGenerator;
 import com.app.communityhub.config.AppProperties;
+import com.app.communityhub.content.comment.CommentEntity;
+import com.app.communityhub.content.comment.CommentRepository;
 import com.app.communityhub.content.shared.AttachmentMapper;
+import com.app.communityhub.content.shared.ContentActionSource;
+import com.app.communityhub.content.shared.ContentAuthorizationPolicy;
+import com.app.communityhub.content.shared.ContentRevisionEventType;
+import com.app.communityhub.content.shared.ContentRevisionRecorder;
 import com.app.communityhub.content.shared.ContentResponseAssembler;
 import com.app.communityhub.content.shared.CursorCodec;
 import com.app.communityhub.content.shared.CursorPageResponse;
@@ -12,11 +19,12 @@ import com.app.communityhub.content.shared.SortOrder;
 import com.app.communityhub.media.MediaAssetEntity;
 import com.app.communityhub.media.attachment.MediaAttachmentService;
 import com.app.communityhub.user.UserRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,9 +34,12 @@ public class PostService {
 
     private final AppProperties appProperties;
     private final PostRepository postRepository;
+    private final CommentRepository commentRepository;
     private final UserRepository userRepository;
     private final MediaAttachmentService mediaAttachmentService;
     private final AttachmentMapper attachmentMapper;
+    private final ContentAuthorizationPolicy contentAuthorizationPolicy;
+    private final ContentRevisionRecorder contentRevisionRecorder;
     private final ContentResponseAssembler contentResponseAssembler;
     private final CursorCodec cursorCodec;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
@@ -55,7 +66,9 @@ public class PostService {
                 .attachments(attachmentMapper.toAttachmentDocuments(attachments))
                 .build();
 
-        return contentResponseAssembler.toPostResponse(postRepository.save(post));
+        PostEntity savedPost = postRepository.save(post);
+        contentRevisionRecorder.recordPost(savedPost, ContentRevisionEventType.CREATED, ContentActionSource.AUTHOR, authorId);
+        return contentResponseAssembler.toPostResponse(savedPost);
     }
 
     @Transactional(readOnly = true)
@@ -89,9 +102,61 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public PostResponse get(Long postId) {
-        PostEntity post = postRepository.findById(postId)
+        PostEntity post = postRepository.findByIdAndDeletedAtIsNull(postId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Post not found"));
         return contentResponseAssembler.toPostResponse(post);
+    }
+
+    @Transactional
+    public PostResponse update(AuthPrincipal actor, Long postId, UpdatePostRequest request) {
+        PostEntity post = postRepository.findByIdAndDeletedAtIsNull(postId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Post not found"));
+        contentAuthorizationPolicy.requireCanEditPost(actor, post);
+
+        String normalizedContent = normalizeContent(request.content());
+        List<String> normalizedKeys = request.mediaKeys() == null ? List.of() : request.mediaKeys().stream().distinct().toList();
+        if (normalizedContent.isBlank() && normalizedKeys.isEmpty()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Post content or images are required");
+        }
+
+        boolean contentChanged = !normalizedContent.equals(post.getContent());
+        List<String> currentKeys = post.getAttachments().stream().map(attachment -> attachment.getMediaKey()).toList();
+        boolean attachmentsChanged = !normalizedKeys.equals(currentKeys);
+        if (!contentChanged && !attachmentsChanged) {
+            return contentResponseAssembler.toPostResponse(post);
+        }
+
+        if (attachmentsChanged) {
+            List<MediaAssetEntity> attachments = mediaAttachmentService.prepareAttachmentsForUpdate(
+                    actor.id(),
+                    normalizedKeys,
+                    appProperties.getContent().getPosts().getMaxAttachments()
+            );
+            mediaAttachmentService.markAttached(attachments);
+            post.replaceAttachments(attachmentMapper.toAttachmentDocuments(attachments));
+        }
+        if (contentChanged) {
+            post.updateContent(normalizedContent);
+        }
+        post.markEdited(Instant.now());
+        contentRevisionRecorder.recordPost(post, ContentRevisionEventType.UPDATED, ContentActionSource.AUTHOR, actor.id());
+        return contentResponseAssembler.toPostResponse(post);
+    }
+
+    @Transactional
+    public void delete(AuthPrincipal actor, Long postId) {
+        PostEntity post = postRepository.findByIdAndDeletedAtIsNull(postId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Post not found"));
+        contentAuthorizationPolicy.requireCanDeletePost(actor, post);
+
+        Instant now = Instant.now();
+        post.markDeleted(actor.id(), ContentActionSource.AUTHOR, now);
+        List<CommentEntity> visibleComments = commentRepository.findAllByPostIdAndDeletedAtIsNullOrderByIdAsc(postId);
+        for (CommentEntity comment : visibleComments) {
+            comment.markDeleted(actor.id(), ContentActionSource.AUTHOR, now);
+            contentRevisionRecorder.recordComment(comment, ContentRevisionEventType.DELETED, ContentActionSource.AUTHOR, actor.id());
+        }
+        contentRevisionRecorder.recordPost(post, ContentRevisionEventType.DELETED, ContentActionSource.AUTHOR, actor.id());
     }
 
     private String normalizeContent(String content) {
