@@ -20,7 +20,9 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -216,6 +218,150 @@ class CommentIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.sort").value("oldest"));
     }
 
+    @Test
+    void authorCanUpdateCommentAndDeleteCascadeHidesSubtreeAndAdjustsReplyCounts() throws Exception {
+        clearContentRows();
+        AuthResponse authorAuth = registerAndLogin(mockMvc, objectMapper, "commentauthor", "password123");
+        AuthResponse otherAuth = registerAndLogin(mockMvc, objectMapper, "commentother", "password123");
+        String authorBearer = bearer(authorAuth);
+        String otherBearer = bearer(otherAuth);
+
+        String postId = createTextOnlyPost(authorBearer, "Comment target");
+        String rootId = createTextOnlyComment(authorBearer, postId, null, "Root before edit");
+        String childId = createTextOnlyComment(authorBearer, postId, rootId, "Child before delete");
+        createTextOnlyComment(authorBearer, postId, childId, "Grandchild before delete");
+
+        mockMvc.perform(patch("/api/comments/" + rootId)
+                        .header("Authorization", authorBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Root after edit","mediaKeys":[]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("Root after edit"))
+                .andExpect(jsonPath("$.isEdited").value(true))
+                .andExpect(jsonPath("$.editedAt").isString())
+                .andExpect(jsonPath("$.replyCount").value(1));
+
+        mockMvc.perform(patch("/api/comments/" + rootId)
+                        .header("Authorization", otherBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Illegal edit","mediaKeys":[]}
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/comments/" + childId)
+                        .header("Authorization", authorBearer))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/posts/" + postId + "/comments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(rootId))
+                .andExpect(jsonPath("$.items[0].replyCount").value(0));
+
+        mockMvc.perform(get("/api/posts/" + postId + "/comments")
+                        .queryParam("parentId", rootId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.nextCursor").value(nullValue()));
+
+        assertThat(revisionCount("comment_revisions", Long.parseLong(rootId))).isEqualTo(2);
+        assertThat(latestRevisionEvent("comment_revisions", Long.parseLong(rootId))).isEqualTo("UPDATED");
+        assertThat(revisionCount("comment_revisions", Long.parseLong(childId))).isEqualTo(2);
+        assertThat(latestRevisionEvent("comment_revisions", Long.parseLong(childId))).isEqualTo("DELETED");
+    }
+
+    @Test
+    void commentEditSupportsAttachmentReplacementAndRejectsEmptyFinalState() throws Exception {
+        clearContentRows();
+        AuthResponse authResponse = registerAndLogin(mockMvc, objectMapper, "commenteditmedia", "password123");
+        String bearerToken = bearer(authResponse);
+
+        String postId = createTextOnlyPost(bearerToken, "Attachment edit target");
+        String firstMediaKey = reserveAndCompleteImage(
+                mockMvc,
+                objectMapper,
+                mediaAssetRepository,
+                objectStorageClient,
+                bearerToken,
+                "comment-edit-1.png"
+        );
+        String secondMediaKey = reserveAndCompleteImage(
+                mockMvc,
+                objectMapper,
+                mediaAssetRepository,
+                objectStorageClient,
+                bearerToken,
+                "comment-edit-2.png"
+        );
+
+        MvcResult createResult = mockMvc.perform(post("/api/comments")
+                        .header("Authorization", bearerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"postId":"%s","content":"Comment with media","mediaKeys":["%s"]}
+                                """.formatted(postId, firstMediaKey)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String commentId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(patch("/api/comments/" + commentId)
+                        .header("Authorization", bearerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Comment with replacement media","mediaKeys":["%s"]}
+                                """.formatted(secondMediaKey)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachments.length()").value(1))
+                .andExpect(jsonPath("$.attachments[0].mediaKey").value(secondMediaKey));
+
+        mockMvc.perform(patch("/api/comments/" + commentId)
+                        .header("Authorization", bearerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"   ","mediaKeys":[]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Comment content or images are required"));
+    }
+
+    @Test
+    void rootCommentCursorPaginationSkipsSoftDeletedRows() throws Exception {
+        clearContentRows();
+        AuthResponse authResponse = registerAndLogin(mockMvc, objectMapper, "commentcursordelete", "password123");
+        String bearerToken = bearer(authResponse);
+
+        String postId = createTextOnlyPost(bearerToken, "Cursor delete post");
+        String rootA = createTextOnlyComment(bearerToken, postId, null, "Root A");
+        String rootB = createTextOnlyComment(bearerToken, postId, null, "Root B");
+        String rootC = createTextOnlyComment(bearerToken, postId, null, "Root C");
+        String rootD = createTextOnlyComment(bearerToken, postId, null, "Root D");
+
+        mockMvc.perform(delete("/api/comments/" + rootC)
+                        .header("Authorization", bearerToken))
+                .andExpect(status().isNoContent());
+
+        MvcResult firstPage = mockMvc.perform(get("/api/posts/" + postId + "/comments")
+                        .queryParam("sort", "newest")
+                        .queryParam("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(rootD))
+                .andExpect(jsonPath("$.items[1].id").value(rootB))
+                .andReturn();
+
+        String cursor = objectMapper.readTree(firstPage.getResponse().getContentAsString()).get("nextCursor").asText();
+        mockMvc.perform(get("/api/posts/" + postId + "/comments")
+                        .queryParam("sort", "newest")
+                        .queryParam("cursor", cursor)
+                        .queryParam("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(rootA))
+                .andExpect(jsonPath("$.nextCursor").value(nullValue()));
+    }
+
     private JsonNode readAttachmentsJson(String tableName, long ownerId) throws Exception {
         String json = jdbcTemplate.queryForObject(
                 "select attachments_jsonb::text from " + tableName + " where id = ?",
@@ -271,5 +417,21 @@ class CommentIntegrationTest extends IntegrationTestSupport {
         jdbcTemplate.update("delete from comments");
         jdbcTemplate.update("delete from posts");
         entityManager.clear();
+    }
+
+    private int revisionCount(String tableName, long entityId) {
+        return jdbcTemplate.queryForObject(
+                "select count(*) from " + tableName + " where entity_id = ?",
+                Integer.class,
+                entityId
+        );
+    }
+
+    private String latestRevisionEvent(String tableName, long entityId) {
+        return jdbcTemplate.queryForObject(
+                "select event_type from " + tableName + " where entity_id = ? order by revision_number desc limit 1",
+                String.class,
+                entityId
+        );
     }
 }

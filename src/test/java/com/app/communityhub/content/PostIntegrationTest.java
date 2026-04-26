@@ -18,7 +18,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -168,6 +171,164 @@ class PostIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.sort").value("oldest"));
     }
 
+    @Test
+    void authorCanUpdatePostAndCreateRevisionWhileOthersReceiveForbidden() throws Exception {
+        AuthResponse authorAuth = registerAndLogin(mockMvc, objectMapper, "posteditauthor", "password123");
+        AuthResponse otherAuth = registerAndLogin(mockMvc, objectMapper, "posteditother", "password123");
+        String authorBearer = bearer(authorAuth);
+        String otherBearer = bearer(otherAuth);
+
+        String postId = createTextOnlyPost(authorBearer, "Original post");
+
+        mockMvc.perform(patch("/api/posts/" + postId)
+                        .header("Authorization", authorBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Updated post","mediaKeys":[]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("Updated post"))
+                .andExpect(jsonPath("$.isEdited").value(true))
+                .andExpect(jsonPath("$.editedAt").isString());
+
+        mockMvc.perform(patch("/api/posts/" + postId)
+                        .header("Authorization", otherBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Intrusion","mediaKeys":[]}
+                                """))
+                .andExpect(status().isForbidden());
+
+        assertThat(revisionCount("post_revisions", Long.parseLong(postId))).isEqualTo(2);
+        assertThat(latestRevisionEvent("post_revisions", Long.parseLong(postId))).isEqualTo("UPDATED");
+        assertThat(latestRevisionSource("post_revisions", Long.parseLong(postId))).isEqualTo("AUTHOR");
+    }
+
+    @Test
+    void postEditSupportsAttachmentReplacementAndRejectsEmptyFinalState() throws Exception {
+        clearContentRows();
+        AuthResponse authResponse = registerAndLogin(mockMvc, objectMapper, "posteditmedia", "password123");
+        String bearerToken = bearer(authResponse);
+
+        String firstMediaKey = reserveAndCompleteImage(
+                mockMvc,
+                objectMapper,
+                mediaAssetRepository,
+                objectStorageClient,
+                bearerToken,
+                "post-edit-1.png"
+        );
+        String secondMediaKey = reserveAndCompleteImage(
+                mockMvc,
+                objectMapper,
+                mediaAssetRepository,
+                objectStorageClient,
+                bearerToken,
+                "post-edit-2.png"
+        );
+
+        MvcResult createResult = mockMvc.perform(post("/api/posts")
+                        .header("Authorization", bearerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Post with media","mediaKeys":["%s"]}
+                                """.formatted(firstMediaKey)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String postId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(patch("/api/posts/" + postId)
+                        .header("Authorization", bearerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Post with replacement media","mediaKeys":["%s"]}
+                                """.formatted(secondMediaKey)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachments.length()").value(1))
+                .andExpect(jsonPath("$.attachments[0].mediaKey").value(secondMediaKey));
+
+        mockMvc.perform(patch("/api/posts/" + postId)
+                        .header("Authorization", bearerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"   ","mediaKeys":[]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Post content or images are required"));
+    }
+
+    @Test
+    void deletingPostSoftDeletesItHidesItFromReadsAndMarksChildrenDeleted() throws Exception {
+        clearContentRows();
+        AuthResponse authResponse = registerAndLogin(mockMvc, objectMapper, "postdelete", "password123");
+        String bearerToken = bearer(authResponse);
+
+        String postId = createTextOnlyPost(bearerToken, "Delete me");
+        String replyPostId = createTextOnlyPost(bearerToken, "Keep me");
+        createTextOnlyComment(bearerToken, postId, null, "Root on deleted post");
+        createTextOnlyComment(bearerToken, postId, null, "Another root on deleted post");
+
+        mockMvc.perform(delete("/api/posts/" + postId)
+                        .header("Authorization", bearerToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/posts/" + postId))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/posts")
+                        .queryParam("sort", "newest")
+                        .queryParam("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(replyPostId));
+
+        mockMvc.perform(get("/api/posts/" + postId + "/comments"))
+                .andExpect(status().isNotFound());
+
+        assertThat(revisionCount("post_revisions", Long.parseLong(postId))).isEqualTo(2);
+        assertThat(latestRevisionEvent("post_revisions", Long.parseLong(postId))).isEqualTo("DELETED");
+        assertThat(latestRevisionSource("post_revisions", Long.parseLong(postId))).isEqualTo("AUTHOR");
+        assertThat(jdbcTemplate.queryForObject("select count(*) from comments where post_id = ? and deleted_at is not null", Integer.class, Long.parseLong(postId)))
+                .isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject("select deleted_source from posts where id = ?", String.class, Long.parseLong(postId)))
+                .isEqualTo("AUTHOR");
+    }
+
+    @Test
+    void postFeedSkipsSoftDeletedRowsAcrossCursorPages() throws Exception {
+        clearContentRows();
+        AuthResponse authResponse = registerAndLogin(mockMvc, objectMapper, "postcursordelete", "password123");
+        String bearerToken = bearer(authResponse);
+
+        String postA = createTextOnlyPost(bearerToken, "Cursor A");
+        String postB = createTextOnlyPost(bearerToken, "Cursor B");
+        String postC = createTextOnlyPost(bearerToken, "Cursor C");
+        String postD = createTextOnlyPost(bearerToken, "Cursor D");
+
+        mockMvc.perform(delete("/api/posts/" + postC)
+                        .header("Authorization", bearerToken))
+                .andExpect(status().isNoContent());
+
+        MvcResult firstPage = mockMvc.perform(get("/api/posts")
+                        .queryParam("sort", "newest")
+                        .queryParam("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(postD))
+                .andExpect(jsonPath("$.items[1].id").value(postB))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andReturn();
+
+        String cursor = objectMapper.readTree(firstPage.getResponse().getContentAsString()).get("nextCursor").asText();
+        mockMvc.perform(get("/api/posts")
+                        .queryParam("sort", "newest")
+                        .queryParam("cursor", cursor)
+                        .queryParam("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(postA))
+                .andExpect(jsonPath("$.nextCursor").value(nullValue()));
+    }
+
     private String columnType(String tableName, String columnName) {
         return jdbcTemplate.queryForObject(
                 """
@@ -195,6 +356,45 @@ class PostIntegrationTest extends IntegrationTestSupport {
         String id = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
         assertThat(id).matches("\\d+");
         return id;
+    }
+
+    private String createTextOnlyComment(String bearerToken, String postId, String parentId, String content) throws Exception {
+        String parentJson = parentId == null ? "null" : "\"%s\"".formatted(parentId);
+        MvcResult result = mockMvc.perform(post("/api/comments")
+                        .header("Authorization", bearerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"postId":"%s","parentId":%s,"content":"%s","mediaKeys":[]}
+                                """.formatted(postId, parentJson, content)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String id = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
+        assertThat(id).matches("\\d+");
+        return id;
+    }
+
+    private int revisionCount(String tableName, long entityId) {
+        return jdbcTemplate.queryForObject(
+                "select count(*) from " + tableName + " where entity_id = ?",
+                Integer.class,
+                entityId
+        );
+    }
+
+    private String latestRevisionEvent(String tableName, long entityId) {
+        return jdbcTemplate.queryForObject(
+                "select event_type from " + tableName + " where entity_id = ? order by revision_number desc limit 1",
+                String.class,
+                entityId
+        );
+    }
+
+    private String latestRevisionSource(String tableName, long entityId) {
+        return jdbcTemplate.queryForObject(
+                "select action_source from " + tableName + " where entity_id = ? order by revision_number desc limit 1",
+                String.class,
+                entityId
+        );
     }
 
     private void clearContentRows() {
