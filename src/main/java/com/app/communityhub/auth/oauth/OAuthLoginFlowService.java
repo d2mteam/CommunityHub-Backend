@@ -7,11 +7,13 @@ import java.net.URI;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OAuthLoginFlowService {
@@ -26,6 +28,7 @@ public class OAuthLoginFlowService {
     @Transactional
     public URI start(String providerName, String returnTo) {
         ProviderSelection provider = provider(providerName);
+        String sanitizedReturnTo = sanitizeReturnTo(returnTo);
         String rawState = tokenSupport.randomToken();
         String codeVerifier = tokenSupport.randomToken();
         String nonce = tokenSupport.randomToken();
@@ -34,9 +37,15 @@ public class OAuthLoginFlowService {
                 provider.name(),
                 codeVerifier,
                 nonce,
-                sanitizeReturnTo(returnTo),
+                sanitizedReturnTo,
                 provider.registration().getRedirectUri(),
                 appProperties.getOauth().getStateTtl()
+        );
+        log.info(
+                "Starting OAuth login flow [provider={}, returnTo={}, redirectUri={}]",
+                provider.name(),
+                sanitizedReturnTo,
+                provider.registration().getRedirectUri()
         );
 
         return UriComponentsBuilder.fromUriString(oidcClient.authorizationEndpoint(provider.name(), provider.registration()))
@@ -56,6 +65,7 @@ public class OAuthLoginFlowService {
     @Transactional
     public URI complete(String providerName, String code, String stateToken) {
         if (code == null || code.isBlank() || stateToken == null || stateToken.isBlank()) {
+            log.warn("OAuth callback was missing code or state [provider={}]", providerName);
             return frontendErrorRedirect("missing_oauth_code", "/");
         }
 
@@ -75,6 +85,12 @@ public class OAuthLoginFlowService {
         );
         UserEntity user = oauthAccountProvisioningService.findOrCreateUser(provider.name(), identity);
         String rawTicket = oauthLoginTicketService.createTicket(user, state.returnTo());
+        log.info(
+                "Completed OAuth login flow and created app login ticket [provider={}, userId={}, returnTo={}]",
+                provider.name(),
+                user.getId(),
+                state.returnTo()
+        );
         return frontendSuccessRedirect(rawTicket, state.returnTo());
     }
 
@@ -101,9 +117,11 @@ public class OAuthLoginFlowService {
         Map<String, AppProperties.OAuth.Provider> providers = appProperties.getOauth().getProviders();
         AppProperties.OAuth.Provider provider = providers.get(normalized);
         if (provider == null) {
+            log.warn("OAuth provider was not found [provider={}]", normalized);
             throw new AppException(HttpStatus.NOT_FOUND, "OAuth provider not found");
         }
         if (!provider.isEnabled()) {
+            log.warn("OAuth provider is disabled [provider={}]", normalized);
             throw new AppException(HttpStatus.NOT_FOUND, "OAuth provider is disabled");
         }
         return new ProviderSelection(normalized, provider);

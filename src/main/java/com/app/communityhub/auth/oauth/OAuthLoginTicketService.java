@@ -11,10 +11,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OAuthLoginTicketService {
@@ -40,22 +42,26 @@ public class OAuthLoginTicketService {
                 serialize(ticket),
                 appProperties.getOauth().getTicketTtl()
         );
+        log.info("Created OAuth login ticket [userId={}, returnTo={}]", user.getId(), returnTo);
         return rawTicket;
     }
 
     public AuthResponse exchange(String ticket) {
         String payload = redisTemplate.opsForValue().getAndDelete(key(ticket));
         if (payload == null) {
+            log.warn("OAuth login ticket exchange failed because ticket was not found");
             throw new AppException(HttpStatus.UNAUTHORIZED, "OAuth login ticket not found");
         }
 
         StoredTicket storedTicket = deserialize(payload);
         if (storedTicket.expiresAt().isBefore(Instant.now())) {
+            log.warn("OAuth login ticket exchange failed because ticket expired [userId={}]", storedTicket.userId());
             throw new AppException(HttpStatus.UNAUTHORIZED, "OAuth login ticket has expired");
         }
 
         UserEntity user = userRepository.findById(storedTicket.userId())
                 .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "OAuth login ticket not found"));
+        log.info("OAuth login ticket exchanged successfully [userId={}, returnTo={}]", user.getId(), storedTicket.returnTo());
         return authSessionService.issueTokensForUser(user);
     }
 

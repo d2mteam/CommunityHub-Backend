@@ -2,6 +2,12 @@ spring:
   data:
     redis:
       timeout: PT2S
+
+logging:
+  level:
+    com.app.communityhub: WARN
+  pattern:
+    level: "%5p [req:%X{requestId:-}]"
   jpa:
     open-in-view: false
     hibernate:

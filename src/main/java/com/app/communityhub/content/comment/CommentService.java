@@ -27,11 +27,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CommentService {
@@ -88,6 +90,15 @@ public class CommentService {
         }
         CommentEntity saved = commentRepository.save(comment);
         contentRevisionRecorder.recordComment(saved, ContentRevisionEventType.CREATED, ContentActionSource.AUTHOR, authorId);
+        log.info(
+                "Created comment [commentId={}, postId={}, authorId={}, parentId={}, depth={}, attachmentCount={}]",
+                saved.getId(),
+                saved.getPost().getId(),
+                authorId,
+                saved.getParent() == null ? null : saved.getParent().getId(),
+                saved.getDepth(),
+                saved.getAttachments().size()
+        );
         return toSingleCommentResponse(saved);
     }
 
@@ -140,6 +151,7 @@ public class CommentService {
         List<String> currentKeys = comment.getAttachments().stream().map(attachment -> attachment.getMediaKey()).toList();
         boolean attachmentsChanged = !normalizedKeys.equals(currentKeys);
         if (!contentChanged && !attachmentsChanged) {
+            log.info("Skipped comment update because no changes were detected [commentId={}, actorId={}]", commentId, actor.id());
             return toSingleCommentResponse(comment);
         }
 
@@ -157,6 +169,14 @@ public class CommentService {
         }
         comment.markEdited(Instant.now());
         contentRevisionRecorder.recordComment(comment, ContentRevisionEventType.UPDATED, ContentActionSource.AUTHOR, actor.id());
+        log.info(
+                "Updated comment [commentId={}, actorId={}, contentChanged={}, attachmentsChanged={}, attachmentCount={}]",
+                commentId,
+                actor.id(),
+                contentChanged,
+                attachmentsChanged,
+                comment.getAttachments().size()
+        );
         return toSingleCommentResponse(comment);
     }
 
@@ -175,6 +195,12 @@ public class CommentService {
             node.markDeleted(actor.id(), ContentActionSource.AUTHOR, now);
             contentRevisionRecorder.recordComment(node, ContentRevisionEventType.DELETED, ContentActionSource.AUTHOR, actor.id());
         }
+        log.info(
+                "Soft deleted comment subtree [commentId={}, actorId={}, subtreeSize={}]",
+                commentId,
+                actor.id(),
+                subtree.size()
+        );
     }
 
     private List<CommentEntity> fetchPage(Long postId, Long parentId, SortOrder sort, CursorToken cursorToken, int pageSize) {

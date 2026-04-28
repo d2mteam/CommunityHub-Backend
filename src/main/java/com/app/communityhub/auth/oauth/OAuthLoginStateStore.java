@@ -7,10 +7,12 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OAuthLoginStateStore {
@@ -39,18 +41,27 @@ public class OAuthLoginStateStore {
                 Instant.now().plus(ttl)
         );
         redisTemplate.opsForValue().set(key(rawState), serialize(storedState), ttl);
+        log.debug("Stored OAuth login state [provider={}, returnTo={}, redirectUri={}]", provider, returnTo, redirectUri);
     }
 
     public StoredState consume(String provider, String rawState) {
         String payload = redisTemplate.opsForValue().getAndDelete(key(rawState));
         if (payload == null) {
+            log.warn("OAuth state was not found during callback [provider={}]", provider);
             throw new AppException(HttpStatus.UNAUTHORIZED, "OAuth state not found");
         }
 
         StoredState storedState = deserialize(payload);
         if (!storedState.provider().equals(provider) || storedState.expiresAt().isBefore(Instant.now())) {
+            log.warn(
+                    "OAuth state validation failed [expectedProvider={}, actualProvider={}, expired={}]",
+                    provider,
+                    storedState.provider(),
+                    storedState.expiresAt().isBefore(Instant.now())
+            );
             throw new AppException(HttpStatus.UNAUTHORIZED, "OAuth state has expired");
         }
+        log.debug("Consumed OAuth login state [provider={}, returnTo={}]", provider, storedState.returnTo());
         return storedState;
     }
 

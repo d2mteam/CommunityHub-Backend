@@ -12,10 +12,12 @@ import com.app.communityhub.user.profile.dto.UpdateProfileRequest;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProfileService {
@@ -37,9 +39,11 @@ public class ProfileService {
         String normalizedUsername = request.username().trim();
         if (!user.getUsername().equalsIgnoreCase(normalizedUsername)
                 && userRepository.existsByUsernameIgnoreCase(normalizedUsername)) {
+            log.warn("Profile update rejected because username is already taken [userId={}, username={}]", userId, normalizedUsername);
             throw new AppException(HttpStatus.CONFLICT, "Username is already taken");
         }
         user.setUsername(normalizedUsername);
+        log.info("Updated profile username [userId={}, username={}]", userId, normalizedUsername);
         return toProfileResponse(user);
     }
 
@@ -47,6 +51,7 @@ public class ProfileService {
     public ProfileResponse updateAvatar(UUID userId, UpdateAvatarRequest request) {
         UserEntity user = getUser(userId);
         if (user.getAvatarMedia() != null && user.getAvatarMedia().getMediaKey().equals(request.mediaKey())) {
+            log.info("Avatar update skipped because requested media is already the current avatar [userId={}, mediaKey={}]", userId, request.mediaKey());
             return toProfileResponse(user);
         }
         MediaAssetEntity avatarMedia = mediaAttachmentService.prepareAttachment(userId, request.mediaKey());
@@ -55,6 +60,7 @@ public class ProfileService {
         }
         mediaAttachmentService.markAttached(List.of(avatarMedia));
         user.setAvatarMedia(avatarMedia);
+        log.info("Updated profile avatar [userId={}, mediaKey={}]", userId, request.mediaKey());
         return toProfileResponse(user);
     }
 

@@ -23,11 +23,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PostService {
@@ -68,6 +70,12 @@ public class PostService {
 
         PostEntity savedPost = postRepository.save(post);
         contentRevisionRecorder.recordPost(savedPost, ContentRevisionEventType.CREATED, ContentActionSource.AUTHOR, authorId);
+        log.info(
+                "Created post [postId={}, authorId={}, attachmentCount={}]",
+                savedPost.getId(),
+                authorId,
+                savedPost.getAttachments().size()
+        );
         return contentResponseAssembler.toPostResponse(savedPost);
     }
 
@@ -123,6 +131,7 @@ public class PostService {
         List<String> currentKeys = post.getAttachments().stream().map(attachment -> attachment.getMediaKey()).toList();
         boolean attachmentsChanged = !normalizedKeys.equals(currentKeys);
         if (!contentChanged && !attachmentsChanged) {
+            log.info("Skipped post update because no changes were detected [postId={}, actorId={}]", postId, actor.id());
             return contentResponseAssembler.toPostResponse(post);
         }
 
@@ -140,6 +149,14 @@ public class PostService {
         }
         post.markEdited(Instant.now());
         contentRevisionRecorder.recordPost(post, ContentRevisionEventType.UPDATED, ContentActionSource.AUTHOR, actor.id());
+        log.info(
+                "Updated post [postId={}, actorId={}, contentChanged={}, attachmentsChanged={}, attachmentCount={}]",
+                postId,
+                actor.id(),
+                contentChanged,
+                attachmentsChanged,
+                post.getAttachments().size()
+        );
         return contentResponseAssembler.toPostResponse(post);
     }
 
@@ -157,6 +174,12 @@ public class PostService {
             contentRevisionRecorder.recordComment(comment, ContentRevisionEventType.DELETED, ContentActionSource.AUTHOR, actor.id());
         }
         contentRevisionRecorder.recordPost(post, ContentRevisionEventType.DELETED, ContentActionSource.AUTHOR, actor.id());
+        log.info(
+                "Soft deleted post and visible comments [postId={}, actorId={}, cascadedCommentCount={}]",
+                postId,
+                actor.id(),
+                visibleComments.size()
+        );
     }
 
     private String normalizeContent(String content) {

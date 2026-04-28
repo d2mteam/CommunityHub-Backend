@@ -13,10 +13,12 @@ import com.app.communityhub.user.UserRepository;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MediaReservationService {
@@ -48,6 +50,13 @@ public class MediaReservationService {
                 request.mimeType(),
                 appProperties.getMedia().getUploadUrlTtl()
         );
+        log.info(
+                "Reserved media upload [userId={}, mediaKey={}, mimeType={}, sizeBytes={}]",
+                userId,
+                mediaKey,
+                request.mimeType(),
+                request.sizeBytes()
+        );
 
         return new CreateMediaReservationResponse(
                 mediaKey,
@@ -62,6 +71,12 @@ public class MediaReservationService {
     public CompleteMediaResponse complete(UUID userId, String mediaKey) {
         MediaAssetEntity mediaAsset = getOwnedMedia(userId, mediaKey);
         if (mediaAsset.getStatus() != MediaStatus.RESERVED) {
+            log.warn(
+                    "Media completion rejected because asset is not reserved [userId={}, mediaKey={}, status={}]",
+                    userId,
+                    mediaKey,
+                    mediaAsset.getStatus()
+            );
             throw new AppException(HttpStatus.CONFLICT, "Media is not awaiting upload completion");
         }
 
@@ -76,6 +91,14 @@ public class MediaReservationService {
                 dimensions.width(),
                 dimensions.height(),
                 Instant.now()
+        );
+        log.info(
+                "Completed media upload [userId={}, mediaKey={}, sizeBytes={}, width={}, height={}]",
+                userId,
+                mediaKey,
+                mediaAsset.getSizeBytes(),
+                mediaAsset.getWidth(),
+                mediaAsset.getHeight()
         );
 
         return new CompleteMediaResponse(
@@ -99,9 +122,11 @@ public class MediaReservationService {
 
     private void validateReservation(CreateMediaReservationRequest request) {
         if (!appProperties.getMedia().getAllowedMimeTypes().contains(request.mimeType())) {
+            log.warn("Media reservation rejected because mime type is unsupported [mimeType={}]", request.mimeType());
             throw new AppException(HttpStatus.BAD_REQUEST, "Unsupported image type");
         }
         if (request.sizeBytes() > appProperties.getMedia().getMaxFileSizeBytes()) {
+            log.warn("Media reservation rejected because file is too large [sizeBytes={}]", request.sizeBytes());
             throw new AppException(HttpStatus.BAD_REQUEST, "Image is too large");
         }
     }

@@ -30,16 +30,28 @@ public class MediaCleanupService {
                 List.of(MediaStatus.RESERVED, MediaStatus.UPLOADED, MediaStatus.ORPHANED),
                 cutoff
         );
+        int deleteFailures = 0;
+        int processed = 0;
         for (MediaAssetEntity mediaAsset : staleMedia) {
             if (mediaAsset.getStatus() == MediaStatus.ATTACHED) {
                 continue;
             }
             mediaAsset.markOrphaned(Instant.now());
+            processed++;
             try {
                 objectStorageClient.deleteObject(mediaAsset.getObjectKey());
             } catch (Exception exception) {
+                deleteFailures++;
                 log.warn("Could not delete orphaned object {}", mediaAsset.getObjectKey(), exception);
             }
+        }
+        if (processed > 0 || deleteFailures > 0) {
+            log.info(
+                    "Completed orphaned media cleanup [candidates={}, processed={}, deleteFailures={}]",
+                    staleMedia.size(),
+                    processed,
+                    deleteFailures
+            );
         }
     }
 }

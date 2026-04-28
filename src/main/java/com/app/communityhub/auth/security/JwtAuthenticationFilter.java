@@ -1,6 +1,7 @@
 package com.app.communityhub.auth.security;
 
 import com.app.communityhub.common.AppException;
+import com.app.communityhub.common.logging.RequestLogContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,6 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     List.of()
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            request.setAttribute(RequestLogContext.AUTHENTICATED_USER_ID_ATTRIBUTE, authPrincipal.id().toString());
+            request.setAttribute(RequestLogContext.AUTHENTICATED_USERNAME_ATTRIBUTE, authPrincipal.username());
         } catch (AppException ignored) {
             SecurityContextHolder.clearContext();
         }

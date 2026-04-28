@@ -5,9 +5,11 @@ import com.app.communityhub.user.UserRepository;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OAuthAccountProvisioningService {
@@ -23,6 +25,12 @@ public class OAuthAccountProvisioningService {
         return oauthAccountRepository.findByProviderAndProviderSubject(providerName, identity.subject())
                 .map(account -> {
                     account.updateEmail(identity.email());
+                    log.info(
+                            "Resolved existing OAuth account [provider={}, providerSubject={}, userId={}]",
+                            providerName,
+                            identity.subject(),
+                            account.getUser().getId()
+                    );
                     return account.getUser();
                 })
                 .orElseGet(() -> createUserWithOAuthAccount(providerName, identity));
@@ -40,6 +48,13 @@ public class OAuthAccountProvisioningService {
                 identity.email()
         );
         oauthAccountRepository.save(account);
+        log.info(
+                "Created new local user from OAuth account [provider={}, providerSubject={}, userId={}, username={}]",
+                providerName,
+                identity.subject(),
+                savedUser.getId(),
+                savedUser.getUsername()
+        );
         return savedUser;
     }
 

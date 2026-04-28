@@ -34,6 +34,12 @@ server:
   error:
     include-message: always
 
+logging:
+  level:
+    com.app.communityhub: ${APP_LOG_LEVEL:INFO}
+  pattern:
+    level: "%5p [req:%X{requestId:-}]"
+
 management:
   endpoints:
     web:

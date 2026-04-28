@@ -1,6 +1,8 @@
 package com.app.communityhub.config;
 
 import com.app.communityhub.auth.security.JwtAuthenticationFilter;
+import com.app.communityhub.common.logging.HttpAccessLogFilter;
+import com.app.communityhub.common.logging.RequestCorrelationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +27,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final AppProperties appProperties;
+    private final RequestCorrelationFilter requestCorrelationFilter;
+    private final HttpAccessLogFilter httpAccessLogFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
@@ -42,7 +46,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/media/read-urls").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(requestCorrelationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(httpAccessLogFilter, RequestCorrelationFilter.class)
+                .addFilterAfter(jwtAuthenticationFilter, HttpAccessLogFilter.class);
 
         return http.build();
     }
